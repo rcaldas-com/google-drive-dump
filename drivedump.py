@@ -25,16 +25,16 @@ load_dotenv(os.path.join(basedir, '.env'))
 drive_dir = '/var/drive'
 if not os.path.isdir(drive_dir): os.mkdir(drive_dir)
 
-### Mongodb connection and initialize (commented)
+### Mongodb connection and initialize
 MONGO_URI = os.environ.get('MONGO_URI')
 MONGODB_CONNECT = False
 
 mongo = MongoClient(MONGO_URI)
 db = mongo['inpa']
 control = db['drive_ctrl']
-# folders.create_index([('id', ASCENDING)], unique=True)
-# control.update_one({'id': 'last_sync'}, {'$set': {
-#                     'value': datetime.strptime('01082019','%d%m%Y')}})
+# control.create_index([('id', ASCENDING)], unique=True)
+# control.insert_one({'id': 'last_sync',
+#                     'value': datetime.strptime('01082019','%d%m%Y')}) # Initial date to get from
 
 ### Google API credentials
 CREDENTIALS = os.environ.get('CREDENTIALS')
@@ -56,9 +56,6 @@ if not creds or not creds.valid:
         pickle.dump(creds, token)
 drive = build('drive', 'v3', credentials=creds)
 
-### Get datetime of last sync to search files by modTime
-last_sync = control.find_one({'id': 'last_sync'}).get('value')
-
 ### Check if have a pending update:
 if control.find_one({'id': 'pending_files'}):
     print('Pending files to download found.')
@@ -66,7 +63,10 @@ if control.find_one({'id': 'pending_files'}):
 else:
     print('Searching online for new files...')
 
-    ### Save the datetime to next run
+    ### Get datetime of last sync to search files by modTime
+    last_sync = control.find_one({'id': 'last_sync'}).get('value')
+    
+    ### Save now datetime to next run
     query_time = datetime.utcnow()
 
     ### Get Files by modtime
@@ -91,7 +91,7 @@ else:
                            {'$set': {'value': query_time}})
         exit(0)
 
-    ### Fix special caracters in file names
+    ### Fix special caracters in file names (just had issues with the '/' so far)
     for file in files:
         if '/' in file['name']:
             print(file)
@@ -106,10 +106,10 @@ else:
                         'last_sync': last_sync,
                         'query_time': query_time})
 
-### Clone list to control download file progress removing from list:
+### Clone list to control download file progress removing from new list:
 new_files = files.copy()
 
-### Function to get full path of file
+### Function to get full path of file recursively
 def get_parent(dirId, last_dir=''):
     d = drive.files().get(fileId=dirId,
                           fields='id,name,parents').execute()
@@ -118,7 +118,7 @@ def get_parent(dirId, last_dir=''):
         result = os.path.join(new_dir, last_dir)
         if not os.path.isdir(result): os.mkdir(result)
         return result
-    ### Not found, must be in root_dir
+    ### No parents, must be in root_dir
     result = os.path.join(drive_dir, last_dir)
     if not os.path.isdir(result): os.mkdir(result)
     return result
@@ -161,9 +161,11 @@ for f in files:
         downl_doc(f['id'],
                   os.path.join(right_dir, f['name']+'.pptx'),
                   'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+    ### Just a folder, throw it:
     elif f['mimeType'] == 'application/vnd.google-apps.folder':
         new_files.remove(f)
         continue
+    ### Not a Google Document, so download normaly:
     else:
         dst_file = os.path.join(right_dir, f['name'])
         request = drive.files().get_media(fileId=f['id'])
@@ -177,9 +179,11 @@ for f in files:
 
 if len(new_files) == 0:
     print('Ok!')
+    ### Update last sync value:
     query_time = control.find_one({'id': 'pending_files'}).get('query_time')
     control.update_one({'id': 'last_sync'},
                        {'$set': {'value': query_time}})
+    ### Delete pending files document:
     control.delete_one({'id': 'pending_files'})
 else:
     print(f'Remaining {len(new_files)} files to download')
