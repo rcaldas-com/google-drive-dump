@@ -16,6 +16,7 @@ So for exemple you can put the script in crontab of the backup server and includ
 
 ### To do:
 
+- ! Fix special caracters in folder names too. ! 
 - Put more info in database to check through a web monitor.
 - Alert fails sending email.
 - Tell me you... Any improvements are welcome.
