@@ -65,7 +65,7 @@ else:
 
     ### Get datetime of last sync to search files by modTime
     last_sync = control.find_one({'id': 'last_sync'}).get('value')
-    
+
     ### Save now datetime to next run
     query_time = datetime.utcnow()
 
@@ -132,7 +132,7 @@ def downl_doc(file_id, dst_file, mime_type):
         done = False
         while done is False:
             status, done = downloader.next_chunk()
-            print("Download %d%%." % int(status.progress() * 100))
+            print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
         new_files.remove(f)
 
 ### Download files
@@ -174,7 +174,7 @@ for f in files:
         done = False
         while done is False:
             status, done = downloader.next_chunk()
-            print("Download %d%%." % int(status.progress() * 100))
+            print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
         new_files.remove(f)
 
 if len(new_files) == 0:
