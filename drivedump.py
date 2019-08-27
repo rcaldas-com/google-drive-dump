@@ -2,6 +2,8 @@
 from __future__ import print_function
 import os
 import io
+import sys
+sys.path.append('/usr/local/lib/python3.7/site-packages') # to run in cron
 import time
 import json
 import pickle
