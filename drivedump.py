@@ -144,40 +144,50 @@ for f in files:
     else:
         right_dir = drive_dir
 
-    if f['mimeType'] == 'application/vnd.google-apps.document':
-        downl_doc(f['id'],
-                     os.path.join(right_dir, f['name']+'.docx'),
-                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    try:
+        if f['mimeType'] == 'application/vnd.google-apps.document':
+            downl_doc(f['id'],
+                         os.path.join(right_dir, f['name']+'.docx'),
+                         'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
-    elif f['mimeType'] == 'application/vnd.google-apps.spreadsheet':
-        downl_doc(f['id'],
-                  os.path.join(right_dir, f['name']+'.xlsx'),
-                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        elif f['mimeType'] == 'application/vnd.google-apps.spreadsheet':
+            downl_doc(f['id'],
+                      os.path.join(right_dir, f['name']+'.xlsx'),
+                      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-    elif f['mimeType'] == 'application/vnd.google-apps.drawing':
-        downl_doc(f['id'],
-                  os.path.join(right_dir, f['name']+'.svg'),
-                  'image/svg+xml')
+        elif f['mimeType'] == 'application/vnd.google-apps.drawing':
+            downl_doc(f['id'],
+                      os.path.join(right_dir, f['name']+'.svg'),
+                      'image/svg+xml')
 
-    elif f['mimeType'] == 'application/vnd.google-apps.presentation':
-        downl_doc(f['id'],
-                  os.path.join(right_dir, f['name']+'.pptx'),
-                  'application/vnd.openxmlformats-officedocument.presentationml.presentation')
-    ### Just a folder, throw it:
-    elif f['mimeType'] == 'application/vnd.google-apps.folder':
-        new_files.remove(f)
-        continue
-    ### Not a Google Document, so download normaly:
-    else:
-        dst_file = os.path.join(right_dir, f['name'])
-        request = drive.files().get_media(fileId=f['id'])
-        fh = io.FileIO(dst_file, 'wb')
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while done is False:
-            status, done = downloader.next_chunk()
-            print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
-        new_files.remove(f)
+        elif f['mimeType'] == 'application/vnd.google-apps.presentation':
+            downl_doc(f['id'],
+                      os.path.join(right_dir, f['name']+'.pptx'),
+                      'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+        ### Just a folder, throw it:
+        elif f['mimeType'] == 'application/vnd.google-apps.folder':
+            new_files.remove(f)
+            continue
+        ### Not a Google Document, so download normaly:
+        else:
+            dst_file = os.path.join(right_dir, f['name'])
+            request = drive.files().get_media(fileId=f['id'])
+            fh = io.FileIO(dst_file, 'wb')
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+                print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
+            new_files.remove(f)
+    except Exception as e:
+        if 'too large' in str(e):
+            print(f"The file '{os.path.join(right_dir, f['name'])}' \
+is too large to be exported by GDrive API!\n\
+Make a manual backup or reduce file size.\n\nSystem Error Message: \n{str(e)}",
+                                                                file=sys.stderr)
+            new_files.remove(f)
+        else:
+            print(e, file=sys.stderr)
 
 if len(new_files) == 0:
     print('Ok!')
