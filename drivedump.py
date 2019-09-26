@@ -16,9 +16,6 @@ from google.auth.transport.requests import Request
 from googleapiclient.http import MediaIoBaseDownload
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-### Install python modules
-# pip3 install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
-
 ### Get base dir and load .env
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, '.env'))
