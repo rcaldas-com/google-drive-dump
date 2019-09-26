@@ -27,6 +27,10 @@ load_dotenv(os.path.join(basedir, '.env'))
 drive_dir = '/var/drive'
 if not os.path.isdir(drive_dir): os.mkdir(drive_dir)
 
+### Excludeds files
+excludeds = [
+    '1lwZYJ_BfYJQDw1OIWlckZia2FaXmcveB8DKPJK1VVTU'
+]
 ### Mongodb connection and initialize
 MONGO_URI = os.environ.get('MONGO_URI')
 MONGODB_CONNECT = False
@@ -139,6 +143,9 @@ def downl_doc(file_id, dst_file, mime_type):
 
 ### Download files
 for f in files:
+    if f['id'] in excludeds:
+        new_files.remove(f)
+        continue
     if f.get('parents'):
         right_dir = get_parent(f['parents'][0])
     else:
