@@ -15,6 +15,10 @@ from pymongo import MongoClient, ASCENDING, errors
 from google.auth.transport.requests import Request
 from googleapiclient.http import MediaIoBaseDownload
 from google_auth_oauthlib.flow import InstalledAppFlow
+from zx import mail
+
+### Install python modules
+# pip3 install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib python-dotenv
 
 ### Get base dir and load .env
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -23,21 +27,6 @@ load_dotenv(os.path.join(basedir, '.env'))
 ### Root path for drive files
 drive_dir = '/var/drive'
 if not os.path.isdir(drive_dir): os.mkdir(drive_dir)
-
-### Excludeds files
-excludeds = [
-    '1lwZYJ_BfYJQDw1OIWlckZia2FaXmcveB8DKPJK1VVTU'
-]
-### Mongodb connection and initialize
-MONGO_URI = os.environ.get('MONGO_URI')
-MONGODB_CONNECT = False
-
-mongo = MongoClient(MONGO_URI)
-db = mongo['inpa']
-control = db['drive_ctrl']
-# control.create_index([('id', ASCENDING)], unique=True)
-# control.insert_one({'id': 'last_sync',
-#                     'value': datetime.strptime('01082019','%d%m%Y')}) # Initial date to get from
 
 ### Google API credentials
 CREDENTIALS = os.environ.get('CREDENTIALS')
@@ -58,6 +47,22 @@ if not creds or not creds.valid:
     with open(GTOKEN, 'wb') as token:
         pickle.dump(creds, token)
 drive = build('drive', 'v3', credentials=creds)
+
+### Mongodb connection and initialize
+MONGO_URI = os.environ.get('MONGO_URI')
+MONGODB_CONNECT = False
+
+mongo = MongoClient(MONGO_URI)
+db = mongo['inpa']
+control = db['drive_ctrl']
+# control.create_index([('id', ASCENDING)], unique=True)
+# control.insert_one({'id': 'last_sync',
+#                     'value': datetime.strptime('01082019','%d%m%Y')}) # Initial date to get from
+
+### Excluded files
+excludes = None
+if control.find_one({'id': 'excludes'}):
+    excludes = control.find_one({'id': 'excludes'}).get('files')
 
 ### Check if have a pending update:
 if control.find_one({'id': 'pending_files'}):
@@ -126,8 +131,33 @@ def get_parent(dirId, last_dir=''):
     if not os.path.isdir(result): os.mkdir(result)
     return result
 
+### Function to download general files
+def downl_file(file_id, dst_file):
+    try:
+        request = drive.files().get_media(fileId=file_id)
+        fh = io.FileIO(dst_file, 'wb')
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
+        new_files.remove(f)
+    except Exception as e:
+        exclude_link = 'https://rcaldas.com/api/driverdump?exclude=id_file'
+        if 'too large' in str(e):
+            print(f"\n[drivedump] The file '{os.path.join(right_dir, f['name'])}' \
+is too large to be downloaded!\nMake a manual backup or reduce file size.\
+\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\
+System Error Message: \n{str(e)}", file=sys.stderr)
+            new_files.remove(f)
+        else:
+            print(f'\n[drivedump] Error:\n\
+\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\
+System Error Message: \n{str(e)}', file=sys.stderr)
+
 ### Function to export google documments
 def downl_doc(file_id, dst_file, mime_type):
+    try:
         request = drive.files().export_media(fileId=file_id,
                                              mimeType=mime_type)
         fh = io.FileIO(dst_file, 'wb')
@@ -137,61 +167,55 @@ def downl_doc(file_id, dst_file, mime_type):
             status, done = downloader.next_chunk()
             print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
         new_files.remove(f)
+    except Exception as e:
+        exclude_link = 'https://rcaldas.com/api/driverdump?exclude=id_file'
+        if 'too large' in str(e):
+            print(f"\n[drivedump] The file '{os.path.join(right_dir, f['name'])}' \
+is too large to be exported by GDrive API!\nMake a manual backup or reduce file size.\
+\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\n\
+System Error Message: \n{str(e)}", file=sys.stderr)
+        else:
+            print(f'\n[drivedump] Error:\n{e}', file=sys.stderr)
+        new_files.remove(f)
 
 ### Download files
 for f in files:
-    if f['id'] in excludeds:
-        new_files.remove(f)
-        continue
+    if excludes:
+        if f['id'] in excludeds:
+            print('Arquivo no excludes')
+            new_files.remove(f)
+            continue
     if f.get('parents'):
         right_dir = get_parent(f['parents'][0])
     else:
         right_dir = drive_dir
 
-    try:
-        if f['mimeType'] == 'application/vnd.google-apps.document':
-            downl_doc(f['id'],
-                         os.path.join(right_dir, f['name']+'.docx'),
-                         'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    if f['mimeType'] == 'application/vnd.google-apps.document':
+        downl_doc(f['id'],
+                     os.path.join(right_dir, f['name']+'.docx'),
+                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
-        elif f['mimeType'] == 'application/vnd.google-apps.spreadsheet':
-            downl_doc(f['id'],
-                      os.path.join(right_dir, f['name']+'.xlsx'),
-                      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    elif f['mimeType'] == 'application/vnd.google-apps.spreadsheet':
+        downl_doc(f['id'],
+                  os.path.join(right_dir, f['name']+'.xlsx'),
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-        elif f['mimeType'] == 'application/vnd.google-apps.drawing':
-            downl_doc(f['id'],
-                      os.path.join(right_dir, f['name']+'.svg'),
-                      'image/svg+xml')
+    elif f['mimeType'] == 'application/vnd.google-apps.drawing':
+        downl_doc(f['id'],
+                  os.path.join(right_dir, f['name']+'.svg'),
+                  'image/svg+xml')
 
-        elif f['mimeType'] == 'application/vnd.google-apps.presentation':
-            downl_doc(f['id'],
-                      os.path.join(right_dir, f['name']+'.pptx'),
-                      'application/vnd.openxmlformats-officedocument.presentationml.presentation')
-        ### Just a folder, throw it:
-        elif f['mimeType'] == 'application/vnd.google-apps.folder':
-            new_files.remove(f)
-            continue
-        ### Not a Google Document, so download normaly:
-        else:
-            dst_file = os.path.join(right_dir, f['name'])
-            request = drive.files().get_media(fileId=f['id'])
-            fh = io.FileIO(dst_file, 'wb')
-            downloader = MediaIoBaseDownload(fh, request)
-            done = False
-            while done is False:
-                status, done = downloader.next_chunk()
-                print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
-            new_files.remove(f)
-    except Exception as e:
-        if 'too large' in str(e):
-            print(f"The file '{os.path.join(right_dir, f['name'])}' \
-is too large to be exported by GDrive API!\n\
-Make a manual backup or reduce file size.\n\nSystem Error Message: \n{str(e)}",
-                                                                file=sys.stderr)
-            new_files.remove(f)
-        else:
-            print(e, file=sys.stderr)
+    elif f['mimeType'] == 'application/vnd.google-apps.presentation':
+        downl_doc(f['id'],
+                  os.path.join(right_dir, f['name']+'.pptx'),
+                  'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+    ### Just a folder, throw it:
+    elif f['mimeType'] == 'application/vnd.google-apps.folder':
+        new_files.remove(f)
+        continue
+    ### Not a Google Document, so download normaly:
+    else:
+        downl_file(f['id'], os.path.join(right_dir, f['name']))
 
 if len(new_files) == 0:
     print('Ok!')
