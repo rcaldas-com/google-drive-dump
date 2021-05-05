@@ -15,7 +15,6 @@ from pymongo import MongoClient, ASCENDING, errors
 from google.auth.transport.requests import Request
 from googleapiclient.http import MediaIoBaseDownload
 from google_auth_oauthlib.flow import InstalledAppFlow
-from zx import mail
 
 ### Install python modules
 # pip3 install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib python-dotenv
@@ -25,7 +24,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, '.env'))
 
 ### Root path for drive files
-drive_dir = '/var/drive'
+drive_dir = '/var/rcaldas/drive_inpa'
 if not os.path.isdir(drive_dir): os.mkdir(drive_dir)
 
 ### Google API credentials
@@ -49,38 +48,31 @@ if not creds or not creds.valid:
 drive = build('drive', 'v3', credentials=creds)
 
 ### Mongodb connection and initialize
-MONGO_URI = os.environ.get('MONGO_URI')
+mongo = MongoClient(os.environ.get('MONGO_URI'))
 MONGODB_CONNECT = False
-
-mongo = MongoClient(MONGO_URI)
-db = mongo['inpa']
-control = db['drive_ctrl']
+db = mongo['zx']
+control = db['control']
+drivedump = control.find_one({'name': 'drivedump_inpa'})
 # control.create_index([('id', ASCENDING)], unique=True)
 # control.insert_one({'id': 'last_sync',
 #                     'value': datetime.strptime('01082019','%d%m%Y')}) # Initial date to get from
 
-### Excluded files
-excludes = None
-if control.find_one({'id': 'excludes'}):
-    excludes = control.find_one({'id': 'excludes'}).get('files')
+print('\n\nDrivedump started: ',datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 ### Check if have a pending update:
-if control.find_one({'id': 'pending_files'}):
+files = drivedump.get('pending_files')
+if files:
     print('Pending files to download found.')
-    files = control.find_one({'id': 'pending_files'}).get('files')
+    query_time = drivedump.get('last_sync')
 else:
     print('Searching online for new files...')
-
-    ### Get datetime of last sync to search files by modTime
-    last_sync = control.find_one({'id': 'last_sync'}).get('value')
-
     ### Save now datetime to next run
     query_time = datetime.utcnow()
-
     ### Get Files by modtime
     files = []
     page_token = None
-    query = 'modifiedTime > \'%s\'' %last_sync.strftime('%Y-%m-%dT%H:%M:%S')
+    # query = "name contains 'Curso Online Cuidados Paliativos'"
+    query = 'modifiedTime > \'%s\'' %drivedump['last_sync'].strftime('%Y-%m-%dT%H:%M:%S')
     while True:
         response = drive.files().list(q=query,
                                       pageSize=50,
@@ -95,11 +87,10 @@ else:
 
     print(f'{len(files)} modified files since last sync')
     if len(files) == 0:
-        control.update_one({'id': 'last_sync'},
-                           {'$set': {'value': query_time}})
+        control.update_one({'name': 'drivedump_inpa'},
+                           {'$set': {'last_sync': query_time}})
         exit(0)
-
-    ### Fix special caracters in file names (just had issues with the '/' so far)
+    ### Fix special caracters in file names (just had issues with the '/' yet)
     for file in files:
         if '/' in file['name']:
             print(file)
@@ -109,12 +100,12 @@ else:
             files.append(file)
 
     ### Save new list in db as pending
-    control.insert_one({'id': 'pending_files',
-                        'files': files,
-                        'last_sync': last_sync,
-                        'query_time': query_time})
+    control.update_one({'name': 'drivedump_inpa'}, {'$set': {
+                            'pending_files': files,
+                            'query_time': query_time}})
 
-### Clone list to control download file progress removing from new list:
+
+### Clone list to manage download file progress removing from new list:
 new_files = files.copy()
 
 ### Function to get full path of file recursively
@@ -143,17 +134,17 @@ def downl_file(file_id, dst_file):
             print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
         new_files.remove(f)
     except Exception as e:
-        exclude_link = 'https://rcaldas.com/api/driverdump?exclude=id_file'
+        exclude_link = f"{os.environ.get('API')}?exclude={file_id}"
         if 'too large' in str(e):
             print(f"\n[drivedump] The file '{os.path.join(right_dir, f['name'])}' \
 is too large to be downloaded!\nMake a manual backup or reduce file size.\
 \nUse this link to exclude the file from drivedump:\n{exclude_link}\n\
 System Error Message: \n{str(e)}", file=sys.stderr)
-            new_files.remove(f)
         else:
-            print(f'\n[drivedump] Error:\n\
-\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\
-System Error Message: \n{str(e)}', file=sys.stderr)
+            print(f"\n[drivedump] Error in file '{os.path.join(right_dir, f['name'])}':\
+\n\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\n\
+System Error Message: \n{str(e)}", file=sys.stderr)
+        new_files.remove(f)
 
 ### Function to export google documments
 def downl_doc(file_id, dst_file, mime_type):
@@ -168,20 +159,22 @@ def downl_doc(file_id, dst_file, mime_type):
             print("Download %s: %d%%." %(dst_file,int(status.progress() * 100)))
         new_files.remove(f)
     except Exception as e:
-        exclude_link = 'https://rcaldas.com/api/driverdump?exclude=id_file'
+        exclude_link = f"{os.environ.get('API')}?exclude={file_id}"
         if 'too large' in str(e):
             print(f"\n[drivedump] The file '{os.path.join(right_dir, f['name'])}' \
 is too large to be exported by GDrive API!\nMake a manual backup or reduce file size.\
 \nUse this link to exclude the file from drivedump:\n{exclude_link}\n\n\
 System Error Message: \n{str(e)}", file=sys.stderr)
         else:
-            print(f'\n[drivedump] Error:\n{e}', file=sys.stderr)
+            print(f"\n[drivedump] Error in file '{os.path.join(right_dir, f['name'])}':\
+\n\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\
+System Error Message: \n{str(e)}", file=sys.stderr)
         new_files.remove(f)
 
 ### Download files
 for f in files:
-    if excludes:
-        if f['id'] in excludeds:
+    if drivedump.get('excludes'):
+        if f['id'] in drivedump['excludes']:
             print('Arquivo no excludes')
             new_files.remove(f)
             continue
@@ -209,6 +202,11 @@ for f in files:
         downl_doc(f['id'],
                   os.path.join(right_dir, f['name']+'.pptx'),
                   'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+
+    elif f['mimeType'] == 'application/vnd.google-apps.form':
+        print(f"\nFile '{os.path.join(right_dir, f['name'])}' is a Form")
+        new_files.remove(f)
+
     ### Just a folder, throw it:
     elif f['mimeType'] == 'application/vnd.google-apps.folder':
         new_files.remove(f)
@@ -218,14 +216,14 @@ for f in files:
         downl_file(f['id'], os.path.join(right_dir, f['name']))
 
 if len(new_files) == 0:
-    print('Ok!')
+    print('All files Downloaded.')
     ### Update last sync value:
-    query_time = control.find_one({'id': 'pending_files'}).get('query_time')
-    control.update_one({'id': 'last_sync'},
-                       {'$set': {'value': query_time}})
-    ### Delete pending files document:
-    control.delete_one({'id': 'pending_files'})
+    control.update_one({'name': 'drivedump_inpa'}, {'$set': {
+                                                        'last_sync': query_time,
+                                                        'pending_files': []
+                                                        }})
 else:
     print(f'Remaining {len(new_files)} files to download')
-    control.update_one({'id': 'pending_files'},
-                       {'$set': {'files': new_files }})
+    control.update_one({'name': 'drivedump_inpa'}, {'$set': {
+                                                'pending_files': new_files,
+                                                'query_time': query_time}})
