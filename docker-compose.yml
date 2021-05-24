@@ -1,0 +1,9 @@
+version: '3'
+services:
+  python:
+    build: .
+    volumes:
+      - <FILE_STORAGE>:/files
+      - <GOOGLE_CREDENTIAL>:/credential
+    environment:
+      - MONGO_URI=<MONGO_URI>
