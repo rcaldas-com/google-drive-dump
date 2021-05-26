@@ -7,6 +7,7 @@ As Google don't have a sync app for Linux, this Python3 script uses the Google A
 - Google API Credentials json file (get yours from gcloud)
 - MongoDB connection URI to control execution and store token
 - Dir to store the files
+
 (Set each one in docker-compose file)
 
 ### What it does:
