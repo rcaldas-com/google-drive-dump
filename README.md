@@ -18,5 +18,6 @@ As Google don't have a sync app for Linux, this Python3 script uses the Google A
 
 ### To do:
 - Alert fails sending email.
+- Make GridFS more efficient, it is creating a new file with each run
 - Put more info in database to check through a web monitor.
 - Tell me you... Any improvements are welcome.
