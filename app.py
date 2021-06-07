@@ -13,7 +13,9 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
+from mail import send_mail
 
+MAIL_ADMIN = getenv('MAIL_ADMIN')
 API = getenv('API')
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 INIT_DATE = datetime.strptime('01082019','%d%m%Y') # Initial date to get from
@@ -166,21 +168,24 @@ for f in files:
         if 'too large' in str(e):
             msg = f"The file {path.join(right_dir, f['name'])} is too large to be exported by GDrive API.\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\nSystem Error Message: \n{str(e)}"
             print(msg)
-            # send_mail(MAIL_ADMIN, 'Drive - Arquivo muito grande', msg)
+            send_mail(MAIL_ADMIN, 'Drive - Arquivo muito grande', msg)
         elif 'Rate Limit Exceeded' in str(e):
             msg = f"Rate limit exceeded\n\nSystem Error Message: \n{str(e)}"
             print(msg)
             doc['pending_files'] = new_files
             col.update_one({}, {'$set': doc})
+            send_mail(MAIL_ADMIN, 'Drive - Rate limit exceeded', msg)
             exit(0)
         else:
             msg = f"Error to download file {path.join(right_dir, f['name'])}\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\nSystem Error Message: \n{str(e)}"
             print(msg)
-            # send_mail(MAIL_ADMIN, 'Drive - Falha ao baixar arquivo', msg)
+            send_mail(MAIL_ADMIN, 'Drive - Falha ao baixar arquivo', msg)
 
 if len(new_files) == 0:
-    print('All files Downloaded.')
+    print(f'All {file_count} files Downloaded.')
+    send_mail(MAIL_ADMIN, f'Drive - All {file_count} files downloaded', 'Ok')
 else:
     print(f'Remaining {len(new_files)} files to download')
+    send_mail(MAIL_ADMIN, f'Drive - Remaining {len(new_files)} files to download', f'Remaining {len(new_files)} files to download')
 doc['pending_files'] = new_files
 col.update_one({}, {'$set': doc})
