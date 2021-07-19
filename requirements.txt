@@ -1,3 +1,4 @@
 pymongo
-google_api_python_client
-google_auth_oauthlib
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
