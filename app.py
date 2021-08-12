@@ -185,9 +185,9 @@ def dump_drive(drive):
                 send_mail(MAIL_ADMIN, 'Drive - Falha ao baixar arquivo', msg)
 
     if len(new_files) == 0:
-        print(f'All {len(new_files)} files Downloaded.')
+        print(f'All {len(files)} files Downloaded.')
         file_names = [x['name'] for x in files]
-        send_mail(MAIL_ADMIN, f'Drive - All {len(new_files)} files downloaded', '\n'.join(file_names))
+        send_mail(MAIL_ADMIN, f'Drive - All {len(files)} files downloaded', '\n'.join(file_names))
     else:
         print(f'Remaining {len(new_files)} files to download')
         file_names = [x['name'] for x in new_files]
