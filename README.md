@@ -6,8 +6,8 @@ As I couldn't find a Google sync app for Linux, I made this Python3 script that 
 ---
 ### What it needs:
 - Google API Credentials json file named ```credentials.json``` (get yours from [gcloud](https://console.cloud.google.com/apis/credentials/oauthclient))
-- MongoDB connection to control execution and store token, in format ```mongodb://user:pwd@server/database```
-- Directory to store the files mounted in ```files``` directory
+- MongoDB URI connection to control execution and store token, in format ```mongodb://user:pwd@server/database```
+- Disk space to store the files mounted in ```files``` directory
 - Variables in a ```.env``` file like that:
   ```
   MONGO_URI=mongodb://user:pwd@server:port/database
