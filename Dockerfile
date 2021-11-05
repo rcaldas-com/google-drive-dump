@@ -8,5 +8,5 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY app.py  mail.py /
 ENTRYPOINT /app.py
 
-VOLUME ["/files", "/credendial"]
+VOLUME ["/files", "/credendial.json"]
 

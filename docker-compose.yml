@@ -3,11 +3,13 @@ services:
   python:
     build: .
     volumes:
-      - <FILE_STORAGE>:/files
-      - <GOOGLE_CREDENTIAL>:/credential
+      - ./files:/files
+      - ./credential.json:/credential.json
     environment:
       - TITLE="Drivedump"
+
       - MONGO_URI=<MONGO_URI>
+      
       - MAIL_ADMIN=<MAIL_ADMIN>
       - MAIL_SERVER=<MAIL_SERVER>
       - MAIL_USERNAME=<MAIL_USERNAME>

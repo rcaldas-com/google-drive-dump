@@ -11,10 +11,13 @@ import pickle # from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaIoBaseDownload
 from mail import send_mail
 
-INIT_DATE = datetime.strptime('19072021','%d%m%Y') # Initial date to get from
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-TOKEN_PATH = '/google.token'
+INIT_DATE = datetime.strptime('01012000','%d%m%Y') # Initial date to get from
+
+CREDENTIAL = '/credential.json'
 FILES_PATH = '/files'
+TOKEN_PATH = '/google.token' # Created from mongodb
+
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 API = getenv('API')
 MAIL_ADMIN = getenv('MAIL_ADMIN')
 
@@ -45,7 +48,7 @@ def init_drive():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('credential', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIAL, SCOPES)
             creds = flow.run_console() # run_local_server(port=0)
         with open(TOKEN_PATH, 'wb') as tokenfile:
             pickle.dump(creds, tokenfile) # tokenfile.write(creds.to_json())
