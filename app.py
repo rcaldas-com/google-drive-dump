@@ -19,13 +19,13 @@ TOKEN_PATH = '/google.token' # Created from mongodb
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 API = getenv('API')
-MAIL_ADMIN = getenv('MAIL_ADMIN')
 
 # MongoDB
 db = MongoClient(getenv('MONGO_URI')).get_database()
 col = db['drivedump']
 doc = col.find_one({})
 if not doc:
+    print('Starting from Initial date')
     col.insert_one(
         {'name': 'drivedump unique document', 'last_sync': INIT_DATE})
     doc = col.find_one({})
@@ -48,6 +48,7 @@ def init_drive():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            print('No creds, creating one')
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIAL, SCOPES)
             creds = flow.run_console() # run_local_server(port=0)
         with open(TOKEN_PATH, 'wb') as tokenfile:
@@ -96,7 +97,6 @@ def dump_drive(drive):
     if files:
         print(f'{len(files)} pending files to download found...')
     else:
-        print('Searching online for new files...')
         files = []
         page_token = None
         query = f"modifiedTime > '{doc['last_sync'].strftime('%Y-%m-%dT%H:%M:%S')}'"
@@ -115,7 +115,6 @@ def dump_drive(drive):
             if page_token is None:
                 break
         file_count = len(files)
-        print(f'{file_count} modified files since last sync')
         doc['last_sync'] = query_time
         if file_count == 0:
             col.update_one({}, {'$set': doc})
@@ -174,27 +173,27 @@ def dump_drive(drive):
             if 'too large' in str(e):
                 msg = f"The file {path.join(right_dir, f['name'])} is too large to be exported by GDrive API.\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\nSystem Error Message: \n{str(e)}"
                 print(msg)
-                send_mail(MAIL_ADMIN, 'Drive - Arquivo muito grande', msg)
+                send_mail('Drive - Arquivo muito grande', msg)
             elif 'Rate Limit Exceeded' in str(e):
                 msg = f"Rate limit exceeded\n\nSystem Error Message: \n{str(e)}"
                 print(msg)
                 doc['pending_files'] = new_files
                 col.update_one({}, {'$set': doc})
-                send_mail(MAIL_ADMIN, 'Drive - Rate limit exceeded', msg)
+                send_mail('Drive - Rate limit exceeded', msg)
                 exit(0)
             else:
                 msg = f"Error to download file {path.join(right_dir, f['name'])}\nUse this link to exclude the file from drivedump:\n{exclude_link}\n\nSystem Error Message: \n{str(e)}"
                 print(msg)
-                send_mail(MAIL_ADMIN, 'Drive - Falha ao baixar arquivo', msg)
+                send_mail('Drive - Falha ao baixar arquivo', msg)
 
     if len(new_files) == 0:
         print(f'All {len(files)} files Downloaded.')
         file_names = [x['name'] for x in files]
-        send_mail(MAIL_ADMIN, f'Drive - All {len(files)} files downloaded', '\n'.join(file_names))
+        send_mail(f'Drive - All {len(files)} files downloaded', '\n'.join(file_names))
     else:
         print(f'Remaining {len(new_files)} files to download')
         file_names = [x['name'] for x in new_files]
-        send_mail(MAIL_ADMIN, f'Drive - Remaining {len(new_files)} files to download', '\n'.join(file_names))
+        send_mail(f'Drive - Remaining {len(new_files)} files to download', '\n'.join(file_names))
     doc['pending_files'] = new_files
     col.update_one({}, {'$set': doc})
 

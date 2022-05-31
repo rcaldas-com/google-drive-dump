@@ -12,15 +12,18 @@ from email import encoders
 TITLE = getenv('TITLE') or 'Drivedump'
 MAIL_DEFAULT_SENDER = f"{TITLE} <{getenv('MAIL_USERNAME')}>"
 
+MAIL_ADMIN = getenv('MAIL_ADMIN')
+
 MAIL_SERVER = getenv('MAIL_SERVER')
 MAIL_USERNAME = getenv('MAIL_USERNAME')
 MAIL_PASSWORD = getenv('MAIL_PASSWORD')
 MAIL_PORT = int(getenv('MAIL_PORT') or 587)
 MAIL_USE_TLS = getenv('MAIL_USE_TLS') or True
 
-def send_mail(recipient, subject, text, html=None):
+def send_mail(subject, text, html=None):
     msg = MIMEMultipart()
-    msg['To'] = recipient
+    msg['To'] = MAIL_ADMIN
+
     msg['Subject'] = subject
     msg['From'] = MAIL_DEFAULT_SENDER
     msg.attach(MIMEText(text, 'plain'))
@@ -41,7 +44,7 @@ def send_mail(recipient, subject, text, html=None):
         server = SMTP(MAIL_SERVER, MAIL_PORT)
         server.starttls(context=CONTEXT)
         server.login(MAIL_USERNAME, MAIL_PASSWORD)
-        server.sendmail(MAIL_USERNAME, recipient, msg.as_string())
+        server.sendmail(MAIL_USERNAME, MAIL_ADMIN, msg.as_string())
 
     except Exception as e:
         print(e)
